@@ -1,10 +1,14 @@
 from flask import Flask, request, jsonify
 import joblib
 import numpy as np
+import pandas as pd
 import traceback
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 
+# Load model and encoders
 model = joblib.load("model/churn_model.pkl")
 encoders = joblib.load("model/label_encoders.pkl")
 
@@ -42,6 +46,32 @@ def predict():
             "churn_prediction": prediction,
             "churn_probability": round(proba, 4)
         })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/batch_predict", methods=["POST"])
+def batch_predict():
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "No file part"}), 400
+
+        file = request.files['file']
+        df = pd.read_csv(file)
+
+        required = ["tenure_months", "monthly_charges", "total_charges", "complaints", "contract_type", "payment_method"]
+        if not all(col in df.columns for col in required):
+            return jsonify({"error": f"Missing columns. Required: {required}"}), 400
+
+        for col in ["contract_type", "payment_method"]:
+            df[col] = encoders[col].transform(df[col])
+
+        X = df[required]
+        df["churn_prediction"] = model.predict(X)
+        df["churn_probability"] = model.predict_proba(X)[:, 1]
+
+        return df.to_json(orient="records")
 
     except Exception as e:
         traceback.print_exc()
