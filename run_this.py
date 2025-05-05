@@ -64,14 +64,17 @@ def batch_predict():
         if not all(col in df.columns for col in required):
             return jsonify({"error": f"Missing columns. Required: {required}"}), 400
 
+        # ✅ Make a copy of original df to preserve readable values
+        original_df = df.copy()
+
         for col in ["contract_type", "payment_method"]:
             df[col] = encoders[col].transform(df[col])
 
         X = df[required]
-        df["churn_prediction"] = model.predict(X)
-        df["churn_probability"] = model.predict_proba(X)[:, 1]
+        original_df["churn_prediction"] = model.predict(X)
+        original_df["churn_probability"] = model.predict_proba(X)[:, 1]
 
-        return df.to_json(orient="records")
+        return original_df.to_json(orient="records")
 
     except Exception as e:
         traceback.print_exc()
